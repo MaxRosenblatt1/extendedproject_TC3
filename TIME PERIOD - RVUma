@@ -1,0 +1,56 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from astropy.timeseries import LombScargle
+
+# Load and preprocess data
+data = pd.read_csv('RVUMa_B.csv')
+times = pd.to_datetime(data['OBS-TIME'], format='%Y-%m-%d %H:%M:%S.%f')
+magnitude = data['CalibratedMag'].values
+
+# Compute the time span of the observations in seconds
+time_span_seconds = (times.max() - times.min()).total_seconds()
+
+# Convert the times to time values in seconds
+time_values_seconds = (times - times.min()).dt.total_seconds()
+
+# Convert the time values to days
+time_values_days = time_values_seconds / 86400
+
+# Compute the Lomb-Scargle periodogram
+min_freq = 1 / time_span_seconds
+max_freq = 2.5
+freqs, power = LombScargle(time_values_days, magnitude).autopower(minimum_frequency=min_freq, maximum_frequency=max_freq)
+
+# Find the time period
+idx = np.argmax(power)
+time_period = 1 / freqs[idx]
+
+# Print the time period
+print('Time period:', time_period)
+
+# Plot the Lomb-Scargle periodogram
+fig, ax = plt.subplots()
+ax.plot(freqs, power)
+ax.set_xlabel('Frequency / Hz')
+ax.set_ylabel('Power / W')
+
+plt.show()
+
+# Error
+# Estimate the uncertainty in the time period
+half_max_power = 0.5 * power[idx]
+
+# Increase the width by modifying the factor (e.g., 0.5 to 0.4 or 0.3)
+uncertainty_factor = 0.25 # Adjust this value to increase or decrease the width used for uncertainty calculation
+left_half_max_idx = np.where(power[:idx] <= uncertainty_factor * power[idx])[0][-1]
+right_half_max_idx = np.where(power[idx:] <= uncertainty_factor * power[idx])[0][0] + idx
+
+# Calculate the width of the peak in the frequency domain
+peak_width_freq = freqs[right_half_max_idx] - freqs[left_half_max_idx]
+
+# Convert the peak width in the frequency domain to the time domain to estimate the uncertainty in the time period
+uncertainty_time_period = (1 / freqs[left_half_max_idx] - 1 / freqs[right_half_max_idx]) / 2
+
+# Print the time period and its uncertainty
+print(f"Time period: {time_period:.5f} ± {uncertainty_time_period:.5f} days")
